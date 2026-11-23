@@ -2,11 +2,47 @@ import os
 import sys
 import time
 import json
+import re
 import requests
+import pyttsx3
+import speech_recognition as sr
 import gradio as gr
 from huggingface_hub import InferenceClient
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+def text_to_speech_file(text, output_path="jarvis_voice_reply.wav"):
+    try:
+        engine = pyttsx3.init()
+        engine.setProperty('rate', 160)
+        voices = engine.getProperty('voices')
+        for v in voices:
+            if "hazel" in v.name.lower() or "david" in v.name.lower() or "great britain" in v.name.lower():
+                engine.setProperty('voice', v.id)
+                break
+        clean = re.sub(r'[*_#`~]', '', str(text))
+        clean = re.sub(r'\[.*?\]\(.*?\)', '', clean)
+        clean = clean[:600]
+        full_path = os.path.abspath(output_path)
+        engine.save_to_file(clean, full_path)
+        engine.runAndWait()
+        return full_path
+    except Exception as e:
+        print("TTS Engine Error:", e)
+        return None
+
+def speech_to_text(audio_path, language="hi-IN"):
+    if not audio_path or not os.path.exists(audio_path):
+        return None
+    try:
+        r = sr.Recognizer()
+        with sr.AudioFile(audio_path) as source:
+            audio_data = r.record(source)
+            text = r.recognize_google(audio_data, language=language)
+            return text
+    except Exception as e:
+        print("STT Engine Error:", e)
+        return None
 
 def get_available_models():
     models = []
@@ -356,13 +392,188 @@ def chat_with_vega(message, history, agent_name, model_choice, api_key):
                 current_history[-1][1] = err
             yield current_history, ""
 
+VOICE_HEAD_JS = """
+<script>
+window.jarvisVoiceEnabled = true;
+window.jarvisVoiceLang = 'hi-IN';
+window.jarvisSpeechRec = null;
+
+function getMsgInput() {
+    return document.querySelector('#msg-input textarea') || 
+           document.querySelector('.gradio-container textarea');
+}
+
+function getSendButton() {
+    return document.querySelector('#send-btn') || 
+           document.querySelector('button.primary');
+}
+
+function initJarvisSpeech() {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+        console.warn("Web Speech API not supported in this browser.");
+        return;
+    }
+    const rec = new SpeechRec();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = window.jarvisVoiceLang;
+
+    rec.onstart = function() {
+        const badge = document.getElementById('mic-badge');
+        if (badge) {
+            badge.innerText = "🔴 LISTENING (बोलिए, JARVIS सुन रहा है...)";
+            badge.style.color = "#ff3366";
+            badge.style.borderColor = "#ff3366";
+            badge.style.boxShadow = "0 0 15px #ff3366";
+        }
+    };
+
+    rec.onresult = function(event) {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+        }
+        const input = getMsgInput();
+        if (input) {
+            input.value = transcript;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        const badge = document.getElementById('mic-badge');
+        if (badge && transcript) {
+            badge.innerText = "🎙️ '" + transcript + "'";
+        }
+    };
+
+    rec.onerror = function(event) {
+        console.error("Speech rec error:", event.error);
+        const badge = document.getElementById('mic-badge');
+        if (badge) {
+            badge.innerText = "⚠️ Mic Error: " + event.error;
+            badge.style.color = "#ffaa00";
+            badge.style.borderColor = "#ffaa00";
+            badge.style.boxShadow = "none";
+        }
+    };
+
+    rec.onend = function() {
+        const badge = document.getElementById('mic-badge');
+        if (badge) {
+            badge.innerText = "● Mic Standby (Click 🎙️ to talk)";
+            badge.style.color = "#00ffaa";
+            badge.style.borderColor = "#00ffaa";
+            badge.style.boxShadow = "none";
+        }
+        const input = getMsgInput();
+        const btn = getSendButton();
+        if (input && input.value.trim().length > 0 && btn) {
+            setTimeout(() => { btn.click(); }, 300);
+        }
+    };
+
+    window.jarvisSpeechRec = rec;
+}
+
+window.toggleSpeech = function() {
+    if (!window.jarvisSpeechRec) {
+        initJarvisSpeech();
+    }
+    if (!window.jarvisSpeechRec) {
+        alert("Microphone recognition is supported in Google Chrome & Microsoft Edge. Please open http://localhost:7860 in Edge or Chrome.");
+        return;
+    }
+    try {
+        window.jarvisSpeechRec.lang = window.jarvisVoiceLang;
+        window.jarvisSpeechRec.start();
+    } catch(e) {
+        console.warn("Speech rec starting error:", e);
+        try { window.jarvisSpeechRec.stop(); } catch(err){}
+    }
+};
+
+window.toggleTTSVoice = function() {
+    window.jarvisVoiceEnabled = !window.jarvisVoiceEnabled;
+    const btn = document.getElementById('tts-toggle-btn');
+    if (btn) {
+        if (window.jarvisVoiceEnabled) {
+            btn.innerText = "🔊 JARVIS Voice: ACTIVE";
+            btn.style.color = "#00f0ff";
+            btn.style.borderColor = "#00f0ff";
+            speakJarvis("Audio system activated, Sir.");
+        } else {
+            btn.innerText = "🔇 JARVIS Voice: MUTED";
+            btn.style.color = "#8ba2c4";
+            btn.style.borderColor = "#8ba2c4";
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+        }
+    }
+};
+
+window.setVoiceLang = function(lang) {
+    window.jarvisVoiceLang = lang;
+    if (window.jarvisSpeechRec) {
+        window.jarvisSpeechRec.lang = lang;
+    }
+};
+
+function speakJarvis(text) {
+    if (!window.jarvisVoiceEnabled || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+
+    let clean = text.replace(/```[\s\S]*?```/g, "Code block omitted.")
+                    .replace(/`.*?`/g, "")
+                    .replace(/[*_#~]/g, "")
+                    .replace(/\[.*?\]\(.*?\)/g, "")
+                    .trim();
+    if (!clean || clean.length < 2) return;
+
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate = 1.05;
+    utt.pitch = 0.95;
+
+    const voices = window.speechSynthesis.getVoices();
+    let selectedVoice = null;
+    const hasHindi = /[\u0900-\u097F]/.test(clean);
+    if (hasHindi) {
+        selectedVoice = voices.find(v => v.lang.includes('hi') || v.name.toLowerCase().includes('hindi') || v.name.toLowerCase().includes('swara') || v.name.toLowerCase().includes('madhur'));
+    }
+    if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.name.toLowerCase().includes('hazel') || v.name.toLowerCase().includes('george') || v.name.toLowerCase().includes('david') || v.lang === 'en-GB');
+    }
+    if (!selectedVoice && voices.length > 0) {
+        selectedVoice = voices.find(v => v.lang.includes('en')) || voices[0];
+    }
+    if (selectedVoice) utt.voice = selectedVoice;
+
+    window.speechSynthesis.speak(utt);
+}
+
+window.addEventListener("DOMContentLoaded", function() {
+    initJarvisSpeech();
+    let lastSpokenText = "";
+    const observer = new MutationObserver(function() {
+        const messages = document.querySelectorAll('.message.bot, [data-testid="bot"], .message-bubble-border');
+        if (messages.length > 0) {
+            const latest = messages[messages.length - 1];
+            const text = latest.innerText || latest.textContent || "";
+            if (text && text !== lastSpokenText && text.trim().length > 3 && !text.includes("Thinking...")) {
+                lastSpokenText = text;
+                speakJarvis(text);
+            }
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+});
+</script>
+"""
+
 def clear_chat():
     return [], ""
 
 def refresh_models():
     return gr.Dropdown(choices=get_available_models())
 
-with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD") as demo:
+with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD", head=VOICE_HEAD_JS) as demo:
     gr.HTML(f"<style>{CUSTOM_CSS}</style>")
     
     with gr.Column(elem_classes=["hud-header"]):
@@ -370,12 +581,12 @@ with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD") as demo:
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <div>
                 <h1 class="hud-title">⚡ JARVIS OMEGA // VEGA HUD</h1>
-                <p style="margin: 4px 0 0 0; color: #8ba2c4; font-size: 13px; letter-spacing: 1px;">LOCAL OFFLINE AI ENGINE • 3D HOLOGRAPHIC MATRIX • 7 SPECIALISTS</p>
+                <p style="margin: 4px 0 0 0; color: #8ba2c4; font-size: 13px; letter-spacing: 1px;">LOCAL OFFLINE AI ENGINE • 3D HOLOGRAPHIC MATRIX • DUAL VOICE STT/TTS</p>
             </div>
             <div style="margin-top: 10px;">
                 <span class="hud-badge">● OLLAMA LOCAL ACTIVE</span>
-                <span class="hud-badge" style="background: rgba(0, 240, 255, 0.15); color: #00f0ff; border-color: #00f0ff;">THREE.JS 3D HUD</span>
-                <span class="hud-badge" style="background: rgba(255, 170, 0, 0.15); color: #ffaa00; border-color: #ffaa00;">100% PRIVATE</span>
+                <span class="hud-badge" style="background: rgba(0, 240, 255, 0.15); color: #00f0ff; border-color: #00f0ff;">🎙️ AUDIO RECOGNITION</span>
+                <span class="hud-badge" style="background: rgba(255, 170, 0, 0.15); color: #ffaa00; border-color: #ffaa00;">🔊 VOICE SYNTHESIS</span>
             </div>
         </div>
         """)
@@ -390,14 +601,36 @@ with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD") as demo:
                         label="VEGA Quantum Neural Stream",
                         height=420,
                     )
+                    
+                    gr.HTML("""
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 8px 0; padding: 8px 12px; background: rgba(5, 12, 25, 0.9); border: 1px solid rgba(0, 240, 255, 0.35); border-radius: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <button id="mic-btn" onclick="toggleSpeech()" style="background: rgba(0, 240, 255, 0.18); border: 1px solid #00f0ff; color: #00f0ff; padding: 7px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: monospace; letter-spacing: 1px;">
+                                🎙️ Speak (माइक से बोलें)
+                            </button>
+                            <button id="tts-toggle-btn" onclick="toggleTTSVoice()" style="background: rgba(0, 255, 170, 0.12); border: 1px solid #00ffaa; color: #00ffaa; padding: 7px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: monospace; letter-spacing: 1px;">
+                                🔊 JARVIS Voice: ACTIVE
+                            </button>
+                            <select onchange="setVoiceLang(this.value)" style="background: #081220; color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.4); padding: 6px 8px; border-radius: 6px; font-family: monospace; font-size: 11px;">
+                                <option value="hi-IN">🇮🇳 Hindi / Hinglish</option>
+                                <option value="en-US">🇬🇧 English (JARVIS)</option>
+                            </select>
+                        </div>
+                        <span id="mic-badge" style="font-family: monospace; font-size: 11px; color: #00ffaa; padding: 4px 8px; border: 1px solid #00ffaa; border-radius: 6px; background: rgba(0, 255, 170, 0.08);">
+                            ● Mic Standby (Click 🎙️ to talk)
+                        </span>
+                    </div>
+                    """)
+
                     with gr.Row():
                         msg = gr.Textbox(
-                            placeholder="State your directive to JARVIS / VEGA...",
+                            placeholder="State your directive or click 🎙️ Speak above...",
                             show_label=False,
                             scale=8,
                             container=False,
+                            elem_id="msg-input",
                         )
-                        send_btn = gr.Button("Transmit 🚀", scale=2, variant="primary")
+                        send_btn = gr.Button("Transmit 🚀", scale=2, variant="primary", elem_id="send-btn")
                     
                     with gr.Row():
                         clear_btn = gr.Button("Clear Stream", variant="secondary")
@@ -448,6 +681,62 @@ with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD") as demo:
                 outputs=[chatbot, msg],
             )
 
+        with gr.TabItem("🎙️ Voice Neural Link & Audio"):
+            gr.Markdown("## 🎙️ Dedicated Voice Subsystem (माइक्रोफोन निर्देश केंद्र)")
+            gr.Markdown("Speak into your microphone or upload an audio note. JARVIS will transcribe your words, run cognitive reasoning, and answer you with a spoken audio response.")
+            
+            with gr.Row():
+                with gr.Column(scale=2):
+                    voice_in = gr.Audio(
+                        sources=["microphone", "upload"],
+                        type="filepath",
+                        label="🎙️ Record Voice Directive (माइक से बोलें)",
+                    )
+                    with gr.Row():
+                        voice_lang = gr.Radio(
+                            choices=["Hindi (हिन्दी)", "English"],
+                            value="Hindi (हिन्दी)",
+                            label="Recognition Dialect",
+                        )
+                        voice_exec_btn = gr.Button("⚡ Execute Voice Directive", variant="primary", scale=2)
+                
+                with gr.Column(scale=2):
+                    voice_out_text = gr.Textbox(
+                        label="Transcribed Voice Directive (पहचानी गई आवाज़)",
+                        placeholder="Your speech transcript will appear here...",
+                    )
+                    voice_out_audio = gr.Audio(
+                        label="🔊 JARVIS Spoken Voice Reply (JARVIS की आवाज़)",
+                        autoplay=True,
+                    )
+
+            def handle_voice_flow(audio_file, lang_choice, history, agent, model, token):
+                if not audio_file:
+                    return "⚠️ No audio detected. Please record or speak into the microphone.", None, history
+                
+                lang_code = "hi-IN" if "Hindi" in lang_choice else "en-US"
+                transcript = speech_to_text(audio_file, language=lang_code)
+                if not transcript:
+                    return "⚠️ Could not understand the audio. Please speak clearly into the microphone.", None, history
+                
+                last_hist = history
+                for h, _ in chat_with_vega(transcript, history, agent, model, token):
+                    last_hist = h
+                
+                ans = ""
+                if last_hist:
+                    last_entry = last_hist[-1]
+                    ans = last_entry["content"] if isinstance(last_entry, dict) else last_entry[1]
+                
+                wav_file = text_to_speech_file(ans) if ans else None
+                return transcript, wav_file, last_hist
+
+            voice_exec_btn.click(
+                handle_voice_flow,
+                inputs=[voice_in, voice_lang, chatbot, agent_selector, model_selector, user_token],
+                outputs=[voice_out_text, voice_out_audio, chatbot],
+            )
+
         with gr.TabItem("👥 7 Specialist Agents"):
             gr.Markdown("## The 7 Core Specialist Agents of JARVIS OMEGA")
             for name, data in AGENTS.items():
@@ -464,6 +753,7 @@ with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD") as demo:
                 "Ollama_Version": "0.40.16",
                 "Local_Inference": "Enabled (100% Offline Capable)",
                 "3D_Graphics": "Three.js WebGL Holographic HUD",
+                "Audio_Engine": "Dual STT (SpeechRecognition) + TTS (SAPI5/WebSpeech)",
                 "Specialists_Available": [
                     "Commander", "Researcher", "Executor", "Guardian", "Creative", "Toolsmith", "Monetizer"
                 ]
