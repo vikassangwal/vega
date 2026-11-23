@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import time
 import json
@@ -498,6 +498,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div style="display: flex; gap: 10px; align-items: center;">
+    <span id="handsfree-badge" class="hud-badge" style="border-color: #00ffaa; color: #00ffaa; background: rgba(0,255,170,0.15); box-shadow: 0 0 10px rgba(0,255,170,0.3);">🟢 HANDS-FREE: ALWAYS LISTENING</span>
+    <button class="quick-chip" id="handsfree-toggle-btn" onclick="toggleHandsFree()" style="color: #00ffaa; border-color: #00ffaa; font-weight: bold;">⚡ HANDS-FREE: ON</button>
     <button class="quick-chip" id="voice-toggle-btn" onclick="toggleVoice()">🔊 VOICE: ON</button>
     <span id="time-display" style="font-size: 12px; letter-spacing: 1px; color: #8ba2c4;">--:--:--</span>
   </div>
@@ -619,25 +621,102 @@ function quickPrompt(txt) {
   sendDirective();
 }
 
-// Guaranteed Audio Player
-function playAudioB64(b64) {
-  if (!voiceEnabled || !b64) return;
+// Hands-Free Mode & Audio State
+let handsFreeMode = true;
+let isSpeakingOrPlaying = false;
+let silenceTimer = null;
+let recognition = null;
+let isListening = false;
+let lastResponseText = "";
+
+function toggleHandsFree() {
+  handsFreeMode = !handsFreeMode;
+  const btn = document.getElementById('handsfree-toggle-btn');
+  const badge = document.getElementById('handsfree-badge');
+  if (handsFreeMode) {
+    btn.innerText = "⚡ HANDS-FREE: ON";
+    btn.style.color = "#00ffaa";
+    btn.style.borderColor = "#00ffaa";
+    badge.innerText = "🟢 HANDS-FREE: ALWAYS LISTENING";
+    badge.style.color = "#00ffaa";
+    badge.style.borderColor = "#00ffaa";
+    startContinuousListening();
+  } else {
+    btn.innerText = "⏸️ HANDS-FREE: OFF";
+    btn.style.color = "#8ba2c4";
+    btn.style.borderColor = "#8ba2c4";
+    badge.innerText = "⚪ MANUAL CLICK MODE";
+    badge.style.color = "#8ba2c4";
+    badge.style.borderColor = "#8ba2c4";
+    if (recognition && isListening) recognition.stop();
+  }
+}
+
+function startContinuousListening() {
+  if (!handsFreeMode || isSpeakingOrPlaying) return;
+  if (!recognition) initRecognition();
+  if (!recognition) return;
   try {
+    recognition.start();
+  } catch(e) {
+    // already listening or restarting
+  }
+}
+
+// Guaranteed Audio Player with Echo Prevention
+function playAudioB64(b64) {
+  if (!voiceEnabled || !b64) {
+    isSpeakingOrPlaying = false;
+    setTimeout(startContinuousListening, 300);
+    return;
+  }
+  try {
+    isSpeakingOrPlaying = true;
+    if (recognition && isListening) {
+      try { recognition.stop(); } catch(e){}
+    }
+    document.getElementById('mic-status').innerText = "JARVIS SPEAKING...";
+    document.getElementById('mic-status').style.color = "#00f0ff";
+
     const audio = new Audio("data:audio/wav;base64," + b64);
     coreSpeedMultiplier = 2.5;
-    audio.onended = () => { coreSpeedMultiplier = 1.0; };
+
+    audio.onended = () => {
+      coreSpeedMultiplier = 1.0;
+      isSpeakingOrPlaying = false;
+      document.getElementById('mic-status').innerText = "LISTENING [HANDS-FREE]";
+      document.getElementById('mic-status').style.color = "#00ffaa";
+      setTimeout(startContinuousListening, 350);
+    };
+
+    audio.onerror = () => {
+      coreSpeedMultiplier = 1.0;
+      isSpeakingOrPlaying = false;
+      setTimeout(startContinuousListening, 350);
+    };
+
     audio.play().catch(e => {
-      console.warn("Audio autoplay fallback:", e);
-      speakTextFallback();
+      console.warn("Audio autoplay blocked, using fallback speech:", e);
+      speakText(lastResponseText);
     });
   } catch(e) {
     console.warn("Audio error:", e);
+    isSpeakingOrPlaying = false;
+    setTimeout(startContinuousListening, 300);
   }
 }
 
 // SpeechSynthesis Fallback
 function speakText(text) {
-  if (!voiceEnabled || !window.speechSynthesis) return;
+  if (!voiceEnabled || !window.speechSynthesis) {
+    isSpeakingOrPlaying = false;
+    setTimeout(startContinuousListening, 300);
+    return;
+  }
+  isSpeakingOrPlaying = true;
+  if (recognition && isListening) {
+    try { recognition.stop(); } catch(e){}
+  }
   window.speechSynthesis.cancel();
   const clean = text.replace(/[*_#`~]/g, "").slice(0, 300);
   const utt = new SpeechSynthesisUtterance(clean);
@@ -646,6 +725,10 @@ function speakText(text) {
   const voices = window.speechSynthesis.getVoices();
   const v = voices.find(v => v.name.includes('David') || v.name.includes('George') || v.lang.includes('en-GB') || v.lang.includes('hi'));
   if (v) utt.voice = v;
+  utt.onend = () => {
+    isSpeakingOrPlaying = false;
+    setTimeout(startContinuousListening, 350);
+  };
   window.speechSynthesis.speak(utt);
 }
 
@@ -659,7 +742,6 @@ async function sendDirective() {
   appendMessage('user', text);
   conversationHistory.push({ role: 'user', content: text });
   
-  // Pulse Core
   coreSpeedMultiplier = 2.0;
 
   try {
@@ -675,10 +757,10 @@ async function sendDirective() {
       })
     });
     const data = await res.json();
+    lastResponseText = data.response;
     appendMessage('jarvis', data.response);
     conversationHistory.push({ role: 'assistant', content: data.response });
     
-    // Play guaranteed voice
     if (data.audio) {
       playAudioB64(data.audio);
     } else {
@@ -701,9 +783,8 @@ async function activateCamera() {
     document.getElementById('cam-status').innerText = "ONLINE";
     document.getElementById('cam-status').style.color = "#00ffaa";
     setupAudioSpectrum(stream);
-    speakText("Optical sensor online. HP HD camera active.");
   } catch(err) {
-    alert("Camera permission denied. Please allow camera & microphone access in your browser address bar.");
+    console.warn("Camera permission pending user gesture:", err);
   }
 }
 
@@ -745,46 +826,62 @@ function setupAudioSpectrum(stream) {
   } catch(e){}
 }
 
-// Voice Recognition
-let recognition = null;
-let isListening = false;
-
 function initRecognition() {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRec) return;
   recognition = new SpeechRec();
   recognition.lang = 'hi-IN';
-  recognition.continuous = false;
+  recognition.continuous = true;
   recognition.interimResults = true;
 
   recognition.onstart = () => {
     isListening = true;
     document.getElementById('mic-btn').classList.add('listening');
+    document.getElementById('mic-status').innerText = "LISTENING [HANDS-FREE]";
+    document.getElementById('mic-status').style.color = "#00ffaa";
   };
+
   recognition.onresult = (e) => {
+    if (isSpeakingOrPlaying) return;
     let t = "";
-    for (let i = e.resultIndex; i < e.results.length; ++i) t += e.results[i][0].transcript;
-    document.getElementById('user-input').value = t;
+    for (let i = e.resultIndex; i < e.results.length; ++i) {
+      t += e.results[i][0].transcript;
+    }
+    const input = document.getElementById('user-input');
+    if (t.trim().length > 0) {
+      input.value = t;
+      document.getElementById('mic-status').innerText = "HEARING: " + t.slice(0, 20) + "...";
+      
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        if (input.value.trim().length > 0 && !isSpeakingOrPlaying) {
+          sendDirective();
+        }
+      }, 1100);
+    }
   };
+
+  recognition.onerror = (e) => {
+    console.warn("Speech recognition error:", e.error);
+  };
+
   recognition.onend = () => {
     isListening = false;
     document.getElementById('mic-btn').classList.remove('listening');
-    if (document.getElementById('user-input').value.trim().length > 0) {
-      sendDirective();
+    if (handsFreeMode && !isSpeakingOrPlaying) {
+      setTimeout(() => {
+        startContinuousListening();
+      }, 250);
     }
   };
 }
 
 function toggleMic() {
   if (!recognition) initRecognition();
-  if (!recognition) {
-    alert("Speech recognition is supported in Google Chrome & Microsoft Edge.");
-    return;
-  }
   if (isListening) {
-    recognition.stop();
+    if (recognition) recognition.stop();
   } else {
-    recognition.start();
+    startContinuousListening();
   }
 }
 
@@ -863,10 +960,20 @@ function animate() {
 }
 animate();
 
-// Initial Speech Greeting
-window.addEventListener('click', () => {
-  // Unlocks audio context on first click
-}, { once: true });
+// Auto-start Hands-Free Listening & Camera
+window.addEventListener('DOMContentLoaded', () => {
+  initRecognition();
+  const unlock = () => {
+    activateCamera();
+    startContinuousListening();
+  };
+  window.addEventListener('click', unlock, { once: true });
+  window.addEventListener('keydown', unlock, { once: true });
+  setTimeout(() => {
+    activateCamera();
+    startContinuousListening();
+  }, 1000);
+});
 </script>
 </body>
 </html>
