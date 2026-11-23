@@ -109,41 +109,71 @@ body, .gradio-container {
 """
 
 def chat_with_vega(message, history, agent_name, model_name, api_key):
-    if not message.strip():
+    if not message or not str(message).strip():
         yield history, ""
         return
     
-    # Get agent configuration
     agent_info = AGENTS.get(agent_name, AGENTS["Commander"])
     system_prompt = agent_info["system"]
     
-    # Use user provided HF token or default environment token
-    hf_token = api_key.strip() if api_key.strip() else os.environ.get("HF_TOKEN")
+    hf_token = api_key.strip() if api_key and api_key.strip() else os.environ.get("HF_TOKEN")
     
+    # Normalize history to list
+    current_history = list(history) if history else []
+    
+    # Build API messages payload
+    api_messages = [{"role": "system", "content": system_prompt}]
+    
+    is_dict = False
+    if current_history:
+        first = current_history[0]
+        if isinstance(first, dict):
+            is_dict = True
+            for item in current_history:
+                api_messages.append({"role": item.get("role", "user"), "content": item.get("content", "")})
+        elif isinstance(first, (list, tuple)) and len(first) == 2:
+            is_dict = False
+            for item in current_history:
+                api_messages.append({"role": "user", "content": str(item[0])})
+                api_messages.append({"role": "assistant", "content": str(item[1])})
+    else:
+        # Default to dict for Gradio 5/6+
+        is_dict = True
+        
+    api_messages.append({"role": "user", "content": message})
+    
+    if is_dict:
+        current_history.append({"role": "user", "content": message})
+        current_history.append({"role": "assistant", "content": ""})
+    else:
+        current_history.append([message, ""])
+        
     try:
         client = InferenceClient(model=model_name, token=hf_token)
-        
-        messages = [{"role": "system", "content": system_prompt}]
-        for user_msg, assistant_msg in history:
-            messages.append({"role": "user", "content": user_msg})
-            messages.append({"role": "assistant", "content": assistant_msg})
-        messages.append({"role": "user", "content": message})
-        
-        history.append((message, ""))
-        
         response_text = ""
-        stream = client.chat_completion(messages, max_tokens=1024, stream=True, temperature=0.7)
+        stream = client.chat_completion(api_messages, max_tokens=1024, stream=True, temperature=0.7)
         for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 response_text += chunk.choices[0].delta.content
-                history[-1] = (message, response_text)
-                yield history, ""
+                if is_dict:
+                    current_history[-1]["content"] = response_text
+                else:
+                    current_history[-1][1] = response_text
+                yield current_history, ""
     except Exception as e:
-        error_msg = f"⚠️ [System Notice] Response error: {str(e)}\n\nTip: You can paste your free Hugging Face / Groq token in the Settings panel for unlimited access."
-        history.append((message, error_msg))
-        yield history, ""
+        err = f"⚠️ [System Notice] {str(e)}\n\nTip: You can paste your free Hugging Face token in the token input box for dedicated high-speed access."
+        if is_dict:
+            current_history[-1]["content"] = err
+        else:
+            current_history[-1][1] = err
+        yield current_history, ""
 
-with gr.Blocks(css=CUSTOM_CSS, title="VEGA OMEGA - AI HUD") as demo:
+def clear_chat():
+    return [], ""
+
+with gr.Blocks(title="VEGA OMEGA - AI HUD") as demo:
+    gr.HTML(f"<style>{CUSTOM_CSS}</style>")
+    
     with gr.Column(elem_classes=["hud-header"]):
         gr.HTML("""
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -166,8 +196,6 @@ with gr.Blocks(css=CUSTOM_CSS, title="VEGA OMEGA - AI HUD") as demo:
                     chatbot = gr.Chatbot(
                         label="VEGA Holographic Stream",
                         height=520,
-                        show_copy_button=True,
-                        bubble_full_width=False,
                     )
                     with gr.Row():
                         msg = gr.Textbox(
@@ -179,7 +207,7 @@ with gr.Blocks(css=CUSTOM_CSS, title="VEGA OMEGA - AI HUD") as demo:
                         send_btn = gr.Button("Transmit 🚀", scale=2, variant="primary")
                     
                     with gr.Row():
-                        clear_btn = gr.ClearButton([msg, chatbot], value="Clear Terminal")
+                        clear_btn = gr.Button("Clear Terminal", variant="secondary")
 
                 with gr.Column(scale=1):
                     gr.Markdown("### 🎛️ Agent Control")
@@ -188,7 +216,7 @@ with gr.Blocks(css=CUSTOM_CSS, title="VEGA OMEGA - AI HUD") as demo:
                         value="Commander",
                         label="Active Specialist Agent",
                     )
-                    agent_desc = gr.Markdown(f"**{AGENTS['Commander']['title']}**\n{AGENTS['Commander']['role']}")
+                    agent_desc = gr.Markdown(f"**{AGENTS['Commander']['title']}**\n\n{AGENTS['Commander']['role']}")
                     
                     def update_agent_desc(name):
                         info = AGENTS.get(name, AGENTS["Commander"])
@@ -216,6 +244,11 @@ with gr.Blocks(css=CUSTOM_CSS, title="VEGA OMEGA - AI HUD") as demo:
             msg.submit(
                 chat_with_vega,
                 inputs=[msg, chatbot, agent_selector, model_selector, user_token],
+                outputs=[chatbot, msg],
+            )
+            clear_btn.click(
+                clear_chat,
+                inputs=[],
                 outputs=[chatbot, msg],
             )
 
