@@ -287,4 +287,5 @@ with gr.Blocks(title="VEGA OMEGA - AI HUD") as demo:
                 ]
             })
 
-demo.queue().launch(server_name="0.0.0.0", server_port=7860)
+if __name__ == "__main__":
+    demo.queue().launch(server_name="0.0.0.0", server_port=7860)
