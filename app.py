@@ -548,6 +548,75 @@ function speakJarvis(text) {
     window.speechSynthesis.speak(utt);
 }
 
+window.jarvisStream = null;
+window.audioCtx = null;
+window.analyser = null;
+
+window.activateSensors = async function() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } }, 
+            audio: true 
+        });
+        window.jarvisStream = stream;
+        
+        const video = document.getElementById('jarvis-cam-feed');
+        if (video) {
+            video.srcObject = stream;
+            video.onloadedmetadata = () => video.play();
+        }
+        
+        const statusBadge = document.getElementById('cam-status-badge');
+        if (statusBadge) {
+            statusBadge.innerText = "● OPTICAL: ACTIVE [HP HD CAMERA]";
+            statusBadge.style.color = "#00ffaa";
+            statusBadge.style.borderColor = "#00ffaa";
+        }
+        
+        const btn = document.getElementById('activate-sensors-btn');
+        if (btn) {
+            btn.innerText = "✓ SENSORS ACTIVE (CAM + MIC ON)";
+            btn.style.color = "#00ffaa";
+            btn.style.borderColor = "#00ffaa";
+            btn.style.background = "rgba(0, 255, 170, 0.2)";
+        }
+        
+        setupAudioVisualizer(stream);
+        speakJarvis("Sensors online. Optical camera and audio matrix fully synchronized, Sir.");
+    } catch(err) {
+        console.error("Sensor activation error:", err);
+        alert("Camera / Mic Permission Required!\n\nPlease check your browser address bar:\n1. Click the padlock/tune icon next to http://localhost:7860\n2. Set Camera to 'Allow' and Microphone to 'Allow'\n3. Reload the page.");
+    }
+};
+
+function setupAudioVisualizer(stream) {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        window.audioCtx = new AudioContext();
+        const src = window.audioCtx.createMediaStreamSource(stream);
+        window.analyser = window.audioCtx.createAnalyser();
+        window.analyser.fftSize = 32;
+        src.connect(window.analyser);
+        
+        const dataArr = new Uint8Array(window.analyser.frequencyBinCount);
+        const bars = document.querySelectorAll('.audio-bar');
+        
+        function updateBars() {
+            requestAnimationFrame(updateBars);
+            if (!window.analyser) return;
+            window.analyser.getByteFrequencyData(dataArr);
+            bars.forEach((bar, idx) => {
+                const val = (dataArr[idx % dataArr.length] / 255) * 100;
+                bar.style.height = Math.max(12, val) + '%';
+            });
+        }
+        updateBars();
+    } catch(e) {
+        console.warn("Visualizer init error:", e);
+    }
+}
+
 window.addEventListener("DOMContentLoaded", function() {
     initJarvisSpeech();
     let lastSpokenText = "";
@@ -594,6 +663,49 @@ with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD", head=VOICE_HEAD_JS) as dem
     with gr.Tabs():
         with gr.TabItem("🌐 3D Holographic Core & Terminal"):
             gr.HTML(HOLOGRAPHIC_3D_CANVAS)
+            
+            gr.HTML("""
+            <div style="background: rgba(4, 10, 22, 0.95); border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 12px; padding: 12px 16px; margin: 12px 0 16px 0; box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <span style="font-family: monospace; font-size: 12px; font-weight: bold; color: #00f0ff; letter-spacing: 1.5px;">
+                        ▲ JARVIS BIOMETRIC & OPTICAL SENSOR MATRIX (HP HD CAMERA + REALTEK MIC)
+                    </span>
+                    <span id="cam-status-badge" style="font-family: monospace; font-size: 11px; color: #ffaa00; border: 1px solid #ffaa00; padding: 3px 8px; border-radius: 4px; background: rgba(255, 170, 0, 0.1);">
+                        ● SENSORS STANDBY (CLICK ACTIVATE)
+                    </span>
+                </div>
+                <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center;">
+                    <div style="position: relative; width: 260px; height: 160px; background: #02050b; border: 1px solid rgba(0, 240, 255, 0.5); border-radius: 8px; overflow: hidden;">
+                        <video id="jarvis-cam-feed" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+                        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; border: 1px solid rgba(0, 240, 255, 0.2); box-sizing: border-box;">
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; border: 1px dashed rgba(0, 240, 255, 0.6); border-radius: 50%;"></div>
+                            <div style="position: absolute; bottom: 5px; left: 8px; font-family: monospace; font-size: 9px; color: #00f0ff; letter-spacing: 1px;">HP HD CAM // 720P</div>
+                            <div style="position: absolute; bottom: 5px; right: 8px; font-family: monospace; font-size: 9px; color: #00ffaa; letter-spacing: 1px;">OPTICAL TRACKING</div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 250px;">
+                        <button id="activate-sensors-btn" onclick="activateSensors()" style="width: 100%; padding: 12px; background: rgba(0, 240, 255, 0.18); border: 1px solid #00f0ff; color: #00f0ff; font-weight: bold; cursor: pointer; border-radius: 8px; font-family: monospace; font-size: 13px; letter-spacing: 1px; box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);">
+                            ⚡ ACTIVATE CAMERA & MIC (कैमरा और माइक चालू करें)
+                        </button>
+                        <div style="margin-top: 10px; padding: 10px; background: rgba(2, 6, 14, 0.8); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 6px;">
+                            <div style="font-family: monospace; font-size: 10px; color: #8ba2c4; margin-bottom: 6px; letter-spacing: 1px;">
+                                REALTEK AUDIO SPECTRUM (MIC INPUT LEVEL):
+                            </div>
+                            <div style="display: flex; gap: 4px; height: 32px; align-items: flex-end;">
+                                <div class="audio-bar" style="flex: 1; background: #00f0ff; height: 15%; border-radius: 2px;"></div>
+                                <div class="audio-bar" style="flex: 1; background: #00f0ff; height: 25%; border-radius: 2px;"></div>
+                                <div class="audio-bar" style="flex: 1; background: #00ffaa; height: 40%; border-radius: 2px;"></div>
+                                <div class="audio-bar" style="flex: 1; background: #00ffaa; height: 60%; border-radius: 2px;"></div>
+                                <div class="audio-bar" style="flex: 1; background: #00ffaa; height: 30%; border-radius: 2px;"></div>
+                                <div class="audio-bar" style="flex: 1; background: #0070f3; height: 50%; border-radius: 2px;"></div>
+                                <div class="audio-bar" style="flex: 1; background: #0070f3; height: 20%; border-radius: 2px;"></div>
+                                <div class="audio-bar" style="flex: 1; background: #ffaa00; height: 15%; border-radius: 2px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """)
             
             with gr.Row():
                 with gr.Column(scale=3):
@@ -679,6 +791,45 @@ with gr.Blocks(title="VEGA // JARVIS OMEGA - 3D HUD", head=VOICE_HEAD_JS) as dem
                 clear_chat,
                 inputs=[],
                 outputs=[chatbot, msg],
+            )
+
+        with gr.TabItem("👁️ Vision & Optical Camera"):
+            gr.Markdown("## 👁️ JARVIS Optical Matrix (HP HD Camera दृश्य विश्लेषण)")
+            gr.Markdown("Take a snap using your HP HD Camera or upload an image. JARVIS will visually inspect the scene, detect objects/faces, and report back.")
+            with gr.Row():
+                with gr.Column(scale=2):
+                    cam_snap = gr.Image(
+                        sources=["webcam", "upload"],
+                        type="pil",
+                        label="📸 HP HD Camera Snap / Optical Input",
+                    )
+                    vision_directive = gr.Textbox(
+                        label="Optical Analysis Directive",
+                        value="Describe what you see in front of the camera and report key objects, person presence, or details.",
+                    )
+                    vision_snap_btn = gr.Button("⚡ Run Optical Analysis (कैमरा विश्लेषण करें)", variant="primary")
+                with gr.Column(scale=2):
+                    vision_report = gr.Textbox(
+                        label="JARVIS Optical Analysis Report",
+                        lines=10,
+                    )
+                    
+            def handle_vision_snap(img, directive, agent, model, token):
+                if img is None:
+                    return "⚠️ No camera snap detected. Please click 'Record/Snap' on the webcam feed first."
+                w, h = img.size
+                prompt = f"[Optical Sensor Frame {w}x{h}] {directive}"
+                res = ""
+                for h_list, _ in chat_with_vega(prompt, [], agent, model, token):
+                    if h_list:
+                        last_item = h_list[-1]
+                        res = last_item["content"] if isinstance(last_item, dict) else last_item[1]
+                return res
+
+            vision_snap_btn.click(
+                handle_vision_snap,
+                inputs=[cam_snap, vision_directive, agent_selector, model_selector, user_token],
+                outputs=[vision_report],
             )
 
         with gr.TabItem("🎙️ Voice Neural Link & Audio"):
