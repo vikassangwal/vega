@@ -5,6 +5,18 @@ import json
 import gradio as gr
 from huggingface_hub import InferenceClient
 
+try:
+    import spaces
+except ImportError:
+    class spaces:
+        @staticmethod
+        def GPU(fn=None, *args, **kwargs):
+            if fn:
+                return fn
+            def wrapper(f):
+                return f
+            return wrapper
+
 # Available models on Hugging Face Free Inference
 DEFAULT_MODELS = [
     "Qwen/Qwen2.5-Coder-32B-Instruct",
@@ -108,6 +120,7 @@ body, .gradio-container {
 }
 """
 
+@spaces.GPU
 def chat_with_vega(message, history, agent_name, model_name, api_key):
     if not message or not str(message).strip():
         yield history, ""
@@ -118,10 +131,8 @@ def chat_with_vega(message, history, agent_name, model_name, api_key):
     
     hf_token = api_key.strip() if api_key and api_key.strip() else os.environ.get("HF_TOKEN")
     
-    # Normalize history to list
     current_history = list(history) if history else []
     
-    # Build API messages payload
     api_messages = [{"role": "system", "content": system_prompt}]
     
     is_dict = False
@@ -137,7 +148,6 @@ def chat_with_vega(message, history, agent_name, model_name, api_key):
                 api_messages.append({"role": "user", "content": str(item[0])})
                 api_messages.append({"role": "assistant", "content": str(item[1])})
     else:
-        # Default to dict for Gradio 5/6+
         is_dict = True
         
     api_messages.append({"role": "user", "content": message})
@@ -183,7 +193,7 @@ with gr.Blocks(title="VEGA OMEGA - AI HUD") as demo:
             </div>
             <div style="margin-top: 10px;">
                 <span class="hud-badge">● LIVE 24/7</span>
-                <span class="hud-badge" style="background: rgba(0, 240, 255, 0.15); color: #00f0ff; border-color: #00f0ff;">16 GB RAM CLOUD</span>
+                <span class="hud-badge" style="background: rgba(0, 240, 255, 0.15); color: #00f0ff; border-color: #00f0ff;">ZeroGPU READY</span>
                 <span class="hud-badge" style="background: rgba(255, 170, 0, 0.15); color: #ffaa00; border-color: #ffaa00;">ZERO-KNOWLEDGE ACTIVE</span>
             </div>
         </div>
@@ -266,7 +276,7 @@ with gr.Blocks(title="VEGA OMEGA - AI HUD") as demo:
                 "System": "VEGA OMEGA Cloud Instance",
                 "Status": "Online (24x7 Continuous)",
                 "Host": "Hugging Face Spaces Cloud",
-                "RAM": "16 GB Allocated",
+                "Hardware": "ZeroGPU + 16 GB RAM",
                 "Architecture": "FastAPI + React HUD + 7-Tier Memory",
                 "Active_Memory_Tiers": [
                     "Working Memory", "Short-term Cache", "Episodic Journal",
