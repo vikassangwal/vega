@@ -1,0 +1,244 @@
+{
+  "dashboard": {
+    "title": "VEGA Memory System",
+    "uid": "vega-memory-system",
+    "tags": ["vega", "memory", "mem0", "chromadb", "neo4j"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Total Memories",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_total_entries",
+            "legendFormat": "Total",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Short-term Buffer",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_short_term_turns",
+            "legendFormat": "Turns",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Working Memory Items",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_working_items",
+            "legendFormat": "Items",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Episodic Memories (Mem0)",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_episodic_count",
+            "legendFormat": "Memories",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Semantic Vectors (ChromaDB)",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 4, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_semantic_count",
+            "legendFormat": "Vectors",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Graph Nodes (Neo4j)",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 4, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_graph_nodes",
+            "legendFormat": "Nodes",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Graph Relationships",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 4, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_graph_relationships",
+            "legendFormat": "Edges",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Procedural Patterns",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 4, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_memory_procedural_patterns",
+            "legendFormat": "Patterns",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Search Queries/sec",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_memory_search_total[5m])",
+            "legendFormat": "Queries/sec",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Ingest Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_memory_ingest_total[5m])",
+            "legendFormat": "Ingests/sec",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Memory by Tier",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "vega_memory_entries_by_tier",
+            "legendFormat": "{{tier}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "displayMode": "pie"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Consolidation Runs",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_memory_consolidations_total[1h])",
+            "legendFormat": "Runs/hour",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Mem0 Stats",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 10},
+        "targets": [
+          {
+            "expr": "vega_mem0_stats",
+            "format": "table",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "ChromaDB Stats",
+        "type": "table",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 10},
+        "targets": [
+          {
+            "expr": "vega_chromadb_stats",
+            "format": "table",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "Neo4j Stats",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 34, "w": 12, "h": 10},
+        "targets": [
+          {
+            "expr": "vega_neo4j_stats",
+            "format": "table",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "title": "Search Latency (p50/p95/p99)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 34, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(vega_memory_search_latency_bucket[5m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(vega_memory_search_latency_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(vega_memory_search_latency_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      }
+    ]
+  },
+  "version": 1
+}

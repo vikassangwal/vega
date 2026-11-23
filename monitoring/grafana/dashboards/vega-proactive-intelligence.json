@@ -1,0 +1,306 @@
+{
+  "dashboard": {
+    "title": "VEGA Proactive Intelligence",
+    "uid": "vega-proactive-intelligence",
+    "tags": ["vega", "proactive", "suggestions", "briefing", "anomalies"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active Suggestions",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_active_suggestions",
+            "legendFormat": "Active",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "colorMode": "value",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 5, "color": "yellow"},
+                {"value": 10, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Suggestions Fired (1h)",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "increase(vega_suggestions_fired_total[1h])",
+            "legendFormat": "Count",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Suggestions Accepted",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "increase(vega_suggestions_accepted_total[1h])",
+            "legendFormat": "Accepted",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Suggestions Dismissed",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "increase(vega_suggestions_dismissed_total[1h])",
+            "legendFormat": "Dismissed",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Suggestion Types (1h)",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (type) (increase(vega_suggestions_fired_total[1h]))",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "displayMode": "pie"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Suggestions Over Time",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_suggestions_fired_total[5m])",
+            "legendFormat": "Fired",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(vega_suggestions_accepted_total[5m])",
+            "legendFormat": "Accepted",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(vega_suggestions_dismissed_total[5m])",
+            "legendFormat": "Dismissed",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Daily Briefing Status",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 12, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_briefing_generated",
+            "legendFormat": "Generated Today",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "No", "color": "red"}, "1": {"text": "Yes", "color": "green"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Briefing Sections Generated",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 12, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_briefing_sections_count",
+            "legendFormat": "Sections",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Briefing Duration Estimate",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 12, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_briefing_duration_seconds",
+            "legendFormat": "Seconds",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Active Anomalies",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 12, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_active_anomalies",
+            "legendFormat": "Active",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "colorMode": "value",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 3, "color": "yellow"},
+                {"value": 10, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Anomalies by Severity",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (severity) (vega_anomalies_active)",
+            "legendFormat": "{{severity}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "displayMode": "pie"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Anomalies by Type",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (type) (vega_anomalies_active)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "displayMode": "pie"
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "Anomalies Over Time",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_anomalies_detected_total[5m])",
+            "legendFormat": "Detected",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(vega_anomalies_resolved_total[5m])",
+            "legendFormat": "Resolved",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Baseline Metrics Health",
+        "type": "table",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 10},
+        "targets": [
+          {
+            "expr": "vega_baseline_metrics",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left"
+            }
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "Suggestion Acceptance Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_suggestions_accepted_total[1h]) / rate(vega_suggestions_fired_total[1h])",
+            "legendFormat": "Acceptance Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": 16,
+        "title": "Context Updates",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_context_updates_total[5m])",
+            "legendFormat": "Updates/sec",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  },
+  "version": 1
+}

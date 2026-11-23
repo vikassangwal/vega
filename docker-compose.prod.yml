@@ -1,0 +1,857 @@
+# =============================================================================
+# VEGA (JARVIS OMEGA) - Production Docker Compose
+# =============================================================================
+# Production-ready stack with:
+# - Multi-stage builds
+# - Resource limits & reservations
+# - Health checks
+# - Secrets management
+# - Logging & monitoring
+# - Backup strategies
+# =============================================================================
+
+version: '3.9'
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  vega-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  # Databases
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  chromadb_data:
+    driver: local
+
+  # Models & Data
+  vega_models:
+    driver: local
+  vega_data:
+    driver: local
+  vega_logs:
+    driver: local
+  vega_face_db:
+    driver: local
+
+  # Monitoring
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+  # Backups
+  postgres_backups:
+    driver: local
+  neo4j_backups:
+    driver: local
+
+# =============================================================================
+# SECRETS (managed externally, referenced here)
+# =============================================================================
+secrets:
+  openai_api_key:
+    external: true
+  anthropic_api_key:
+    external: true
+  deepgram_api_key:
+    external: true
+  elevenlabs_api_key:
+    external: true
+  postgres_password:
+    external: true
+  neo4j_password:
+    external: true
+  jwt_secret:
+    external: true
+  hf_token:
+    external: true
+  home_assistant_token:
+    external: true
+  e2b_api_key:
+    external: true
+  grafana_password:
+    external: true
+
+# =============================================================================
+# SERVICES
+# =============================================================================
+services:
+  # -----------------------------------------------------------------------------
+  # CORE INFRASTRUCTURE
+  # -----------------------------------------------------------------------------
+
+  # PostgreSQL with pgvector
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: vega-postgres
+    environment:
+      POSTGRES_DB: vega
+      POSTGRES_USER: vega
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - postgres_backups:/backups
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vega -d vega"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # Redis with persistence
+  redis:
+    image: redis:7-alpine
+    container_name: vega-redis
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru --save 900 1 --save 300 10 --save 60 10000
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # Neo4j with GraphRAG
+  neo4j:
+    image: neo4j:5.15-enterprise
+    container_name: vega-neo4j
+    environment:
+      NEO4J_AUTH_FILE: /run/secrets/neo4j_password
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+      NEO4J_dbms_memory_heap_initial__size: 2G
+      NEO4J_dbms_memory_heap_max__size: 8G
+      NEO4J_dbms_memory_pagecache_size: 4G
+      NEO4J_apoc_export_file_enabled: "true"
+      NEO4J_apoc_import_file_enabled: "true"
+    secrets:
+      - neo4j_password
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_backups:/backups
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "$$NEO4J_PASSWORD", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 12G
+        reservations:
+          cpus: '1'
+          memory: 4G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # ChromaDB for vector embeddings
+  chromadb:
+    image: chromadb/chroma:0.5.5
+    container_name: vega-chromadb
+    environment:
+      CHROMA_SERVER_HOST: 0.0.0.0
+      CHROMA_SERVER_HTTP_PORT: 8000
+      ALLOW_RESET: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # -----------------------------------------------------------------------------
+  # LLM INFERENCE
+  # -----------------------------------------------------------------------------
+
+  # Ollama for local LLMs
+  ollama:
+    image: ollama/ollama:latest
+    container_name: vega-ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_ORIGINS: "*"
+      OLLAMA_KEEP_ALIVE: "24h"
+      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_MAX_LOADED_MODELS: "2"
+    volumes:
+      - vega_models:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 32G
+        reservations:
+          cpus: '2'
+          memory: 16G
+    restart: unless-stopped
+    networks:
+      - vega-network
+    # GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # -----------------------------------------------------------------------------
+  # VEGA BACKEND
+  # -----------------------------------------------------------------------------
+
+  vega-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    container_name: vega-backend
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=vega
+      - POSTGRES_USER=vega
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD_FILE=/run/secrets/neo4j_password
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - OLLAMA_HOST=http://ollama:11434
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      - ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_api_key
+      - DEEPGRAM_API_KEY_FILE=/run/secrets/deepgram_api_key
+      - ELEVENLABS_API_KEY_FILE=/run/secrets/elevenlabs_api_key
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - HF_TOKEN_FILE=/run/secrets/hf_token
+      - HOME_ASSISTANT_URL=${HOME_ASSISTANT_URL}
+      - HOME_ASSISTANT_TOKEN_FILE=/run/secrets/home_assistant_token
+      - E2B_API_KEY_FILE=/run/secrets/e2b_api_key
+    secrets:
+      - postgres_password
+      - neo4j_password
+      - openai_api_key
+      - anthropic_api_key
+      - deepgram_api_key
+      - elevenlabs_api_key
+      - jwt_secret
+      - hf_token
+      - home_assistant_token
+      - e2b_api_key
+    volumes:
+      - vega_models:/app/models
+      - vega_data:/app/data
+      - vega_logs:/app/logs
+      - vega_face_db:/app/.vega/face_db
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '1'
+          memory: 4G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # Celery Worker for background tasks
+  celery-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    container_name: vega-celery-worker
+    command: celery -A core.task_queue worker --loglevel=info --concurrency=4 --pool=prefork
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=vega
+      - POSTGRES_USER=vega
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD_FILE=/run/secrets/neo4j_password
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - OLLAMA_HOST=http://ollama:11434
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      - ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_api_key
+    secrets:
+      - postgres_password
+      - neo4j_password
+      - openai_api_key
+      - anthropic_api_key
+    volumes:
+      - vega_models:/app/models
+      - vega_data:/app/data
+      - vega_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # Celery Beat for periodic tasks
+  celery-beat:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    container_name: vega-celery-beat
+    command: celery -A core.task_queue beat --loglevel=info --scheduler celery.beat.PersistentScheduler
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=vega
+      - POSTGRES_USER=vega
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    secrets:
+      - postgres_password
+    volumes:
+      - vega_data:/app/data
+      - vega_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # -----------------------------------------------------------------------------
+  # VOICE SERVICES
+  # -----------------------------------------------------------------------------
+
+  # Whisper STT
+  whisper:
+    image: onerahmet/openai-whisper-asr:latest
+    container_name: vega-whisper
+    environment:
+      ASR_MODEL: large-v3
+      ASR_LANG: auto
+      ASR_TRANSLATE: "false"
+    volumes:
+      - vega_models:/root/.cache/whisper
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '1'
+          memory: 8G
+    restart: unless-stopped
+    networks:
+      - vega-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Piper TTS
+  piper:
+    image: ghcr.io/rhasspy/piper:latest
+    container_name: vega-piper
+    command: --host 0.0.0.0 --port 5000
+    volumes:
+      - vega_models:/voices
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # -----------------------------------------------------------------------------
+  # VISION SERVICES
+  # -----------------------------------------------------------------------------
+
+  # YOLOv8 Detection
+  yolo-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.yolo
+    container_name: vega-yolo
+    environment:
+      YOLO_MODEL: yolov8x.pt
+      CONFIDENCE_THRESHOLD: "0.5"
+      IOU_THRESHOLD: "0.45"
+    volumes:
+      - ./models/yolo:/app/models:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    restart: unless-stopped
+    networks:
+      - vega-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Face Recognition
+  face-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.face
+    container_name: vega-face
+    environment:
+      FACE_MODEL: Facenet512
+      DETECTOR_BACKEND: retinaface
+      ENABLE_EMOTION: "true"
+      ENABLE_AGE_GENDER: "true"
+    volumes:
+      - ./models/face:/app/models:ro
+      - vega_face_db:/app/face_db
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    restart: unless-stopped
+    networks:
+      - vega-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Gesture Recognition
+  gesture-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gesture
+    container_name: vega-gesture
+    environment:
+      MAX_NUM_HANDS: "2"
+      MIN_DETECTION_CONFIDENCE: "0.7"
+      MIN_TRACKING_CONFIDENCE: "0.5"
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # Screen Parser (OmniParser)
+  screen-parser:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.screen_parser
+    container_name: vega-screen-parser
+    environment:
+      MODEL_NAME: microsoft/OmniParser-v2.0
+      DEVICE: cuda
+    volumes:
+      - ./models/omniparser:/app/models:ro
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '1'
+          memory: 4G
+    restart: unless-stopped
+    networks:
+      - vega-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # -----------------------------------------------------------------------------
+  # FRONTEND
+  # -----------------------------------------------------------------------------
+
+  vega-frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: production
+      args:
+        VITE_API_URL: https://vega.local/api
+        VITE_WS_URL: wss://vega.local/ws
+        VITE_APP_NAME: VEGA
+    container_name: vega-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - vega-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # -----------------------------------------------------------------------------
+  # SECURITY
+  # -----------------------------------------------------------------------------
+
+  # E2B Sandbox
+  e2b-sandbox:
+    image: e2bdev/sandbox:latest
+    container_name: vega-e2b
+    environment:
+      E2B_API_KEY_FILE: /run/secrets/e2b_api_key
+      SANDBOX_TEMPLATE: "python3"
+      SANDBOX_TIMEOUT: "300"
+    secrets:
+      - e2b_api_key
+    ports:
+      - "49153:49153"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # -----------------------------------------------------------------------------
+  # MONITORING
+  # -----------------------------------------------------------------------------
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.54
+    container_name: vega-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.4
+    container_name: vega-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD_FILE: /run/secrets/grafana_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel"
+    secrets:
+      - grafana_password
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # -----------------------------------------------------------------------------
+  # REVERSE PROXY
+  # -----------------------------------------------------------------------------
+
+  nginx:
+    image: nginx:alpine
+    container_name: vega-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_cache:/var/cache/nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - vega-backend
+      - vega-frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    restart: unless-stopped
+    networks:
+      - vega-network
+
+  # -----------------------------------------------------------------------------
+  # BACKUP SERVICE
+  # -----------------------------------------------------------------------------
+
+  backup:
+    image: postgres:16
+    container_name: vega-backup
+    command: >
+      sh -c "
+        while true; do
+          pg_dump -h postgres -U vega -d vega > /backups/vega_$(date +%Y%m%d_%H%M%S).sql
+          gzip /backups/vega_$(date +%Y%m%d_%H%M%S).sql
+          find /backups -name '*.sql.gz' -mtime +7 -delete
+          sleep 86400
+        done
+      "
+    environment:
+      PGPASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_backups:/backups
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    restart: unless-stopped
+    networks:
+      - vega-network

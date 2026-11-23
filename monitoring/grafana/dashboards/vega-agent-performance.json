@@ -1,0 +1,269 @@
+{
+  "dashboard": {
+    "title": "VEGA Agent Performance",
+    "uid": "vega-agent-performance",
+    "tags": ["vega", "agents", "performance"],
+    "timezone": "browser",
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Agent Status",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_agent_status{agent=\"orchestrator\"}",
+            "legendFormat": "Orchestrator",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "IDLE", "color": "gray"}, "2": {"text": "RUNNING", "color": "green"}, "3": {"text": "PROCESSING", "color": "blue"}, "4": {"text": "ERROR", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Executor",
+        "type": "stat",
+        "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_agent_status{agent=\"executor\"}",
+            "legendFormat": "Executor",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "IDLE", "color": "gray"}, "2": {"text": "RUNNING", "color": "green"}, "3": {"text": "PROCESSING", "color": "blue"}, "4": {"text": "ERROR", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Researcher",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_agent_status{agent=\"researcher\"}",
+            "legendFormat": "Researcher",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "IDLE", "color": "gray"}, "2": {"text": "RUNNING", "color": "green"}, "3": {"text": "PROCESSING", "color": "blue"}, "4": {"text": "ERROR", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Creative",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_agent_status{agent=\"creative\"}",
+            "legendFormat": "Creative",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "IDLE", "color": "gray"}, "2": {"text": "RUNNING", "color": "green"}, "3": {"text": "PROCESSING", "color": "blue"}, "4": {"text": "ERROR", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Guardian",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_agent_status{agent=\"guardian\"}",
+            "legendFormat": "Guardian",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "IDLE", "color": "gray"}, "2": {"text": "RUNNING", "color": "green"}, "3": {"text": "PROCESSING", "color": "blue"}, "4": {"text": "ERROR", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Planner",
+        "type": "stat",
+        "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_agent_status{agent=\"planner\"}",
+            "legendFormat": "Planner",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "IDLE", "color": "gray"}, "2": {"text": "RUNNING", "color": "green"}, "3": {"text": "PROCESSING", "color": "blue"}, "4": {"text": "ERROR", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Toolsmith",
+        "type": "stat",
+        "gridPos": {"x": 24, "y": 0, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_agent_status{agent=\"toolsmith\"}",
+            "legendFormat": "Toolsmith",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "IDLE", "color": "gray"}, "2": {"text": "RUNNING", "color": "green"}, "3": {"text": "PROCESSING", "color": "blue"}, "4": {"text": "ERROR", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Tasks Completed by Agent",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_agent_tasks_completed_total[5m])",
+            "legendFormat": "{{agent}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Task Success Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_agent_tasks_success_total[5m]) / rate(vega_agent_tasks_total[5m])",
+            "legendFormat": "{{agent}} Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Avg Response Time by Agent",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "vega_agent_avg_response_time_seconds",
+            "legendFormat": "{{agent}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Tool Calls by Agent",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_agent_tool_calls_total[5m])",
+            "legendFormat": "{{agent}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Active Workflows",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 20, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_active_workflows",
+            "legendFormat": "Active",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Pending Approvals",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 20, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "vega_pending_approvals",
+            "legendFormat": "Pending",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Handoffs",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(vega_agent_handoffs_total[5m])",
+            "legendFormat": "{{source}} → {{target}}",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  },
+  "version": 1
+}
