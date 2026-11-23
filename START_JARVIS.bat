@@ -5,7 +5,18 @@ echo ========================================================
 echo       INITIALIZING JARVIS OMEGA (VEGA 3D HUD)
 echo ========================================================
 echo.
-echo [*] Working Directory: C:\Users\HP\.gemini\antigravity\scratch\vega
+
+set SCRIPT_DIR=%~dp0
+cd /d "%SCRIPT_DIR%"
+if not exist "app.py" (
+    if exist "C:\Users\HP\vega\app.py" (
+        cd /d "C:\Users\HP\vega"
+    ) else if exist "C:\Users\HP\.gemini\antigravity\scratch\vega\app.py" (
+        cd /d "C:\Users\HP\.gemini\antigravity\scratch\vega"
+    )
+)
+
+echo [*] Working Directory: %CD%
 echo [*] Checking Local AI Neural Engine (Ollama)...
 
 curl -s http://localhost:11434/api/tags >nul 2>&1
@@ -14,14 +25,12 @@ if %ERRORLEVEL% neq 0 (
     start /B "" "%LOCALAPPDATA%\Programs\Ollama\ollama.exe" serve
     timeout /t 2 /nobreak >nul
 ) else (
-    echo [?] Ollama Local AI Engine Online!
+    echo [OK] Ollama Local AI Engine Online!
 )
 
 echo [*] Model Configured: llama3.2:1b (100%% Offline Local)
 echo [*] Launching Holographic 3D Web HUD...
 echo.
-
-cd /d "C:\Users\HP\.gemini\antigravity\scratch\vega"
 
 timeout /t 2 /nobreak >nul
 start "" http://localhost:7860

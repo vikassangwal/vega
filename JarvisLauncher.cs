@@ -20,7 +20,15 @@ namespace JarvisLauncher
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine(" [*] Initializing JARVIS OMEGA Subsystems...");
             
-            string appDir = @"C:\Users\HP\.gemini\antigravity\scratch\vega";
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            if (!File.Exists(Path.Combine(appDir, "app.py")))
+            {
+                if (Directory.Exists(@"C:\Users\HP\vega") && File.Exists(@"C:\Users\HP\vega\app.py"))
+                    appDir = @"C:\Users\HP\vega";
+                else if (Directory.Exists(@"C:\Users\HP\.gemini\antigravity\scratch\vega") && File.Exists(@"C:\Users\HP\.gemini\antigravity\scratch\vega\app.py"))
+                    appDir = @"C:\Users\HP\.gemini\antigravity\scratch\vega";
+            }
+
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string ollamaPath = Path.Combine(localAppData, @"Programs\Ollama\ollama.exe");
 
@@ -30,7 +38,7 @@ namespace JarvisLauncher
             bool ollamaRunning = IsPortOpen("http://localhost:11434/api/tags");
             if (!ollamaRunning && File.Exists(ollamaPath))
             {
-                Console.WriteLine("Starting Ollama background daemon...");
+                Console.WriteLine("Starting Ollama daemon...");
                 ProcessStartInfo ollamaInfo = new ProcessStartInfo(ollamaPath, "serve")
                 {
                     CreateNoWindow = true,
@@ -50,7 +58,7 @@ namespace JarvisLauncher
             bool appRunning = IsPortOpen("http://localhost:7860");
             if (!appRunning)
             {
-                Console.WriteLine("Starting Python server...");
+                Console.WriteLine("Starting Python server in " + appDir);
                 ProcessStartInfo pyInfo = new ProcessStartInfo("py", "-3.11 app.py")
                 {
                     WorkingDirectory = appDir,
@@ -83,7 +91,7 @@ namespace JarvisLauncher
             Console.WriteLine("  JARVIS OMEGA is currently running in the background.");
             Console.WriteLine("  - 3D Holographic Arc Reactor: Active");
             Console.WriteLine("  - Local AI Model: llama3.2:1b (100% Offline)");
-            Console.WriteLine("  - 7 Specialist Agents: Standing By");
+            Console.WriteLine("  - Voice Engine: Dual STT (Microphone) + TTS (Speech)");
             Console.WriteLine("  - Web Interface: http://localhost:7860");
             Console.WriteLine("  Press 'Q' to exit JARVIS.");
             Console.WriteLine(" ===============================================================\n");
