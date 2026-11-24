@@ -4,6 +4,7 @@ import time
 import json
 import re
 import base64
+import socket
 import requests
 import pyttsx3
 import webbrowser
@@ -28,37 +29,45 @@ AGENTS = {
     "Commander": {
         "title": "👑 Commander Agent",
         "role": "Master Orchestrator & Strategic Planning",
-        "system": "You are JARVIS OMEGA Commander Agent. Speak authoritatively, calmly, and concisely with maximum strategic precision. Address the user as Sir."
+        "system": (
+            "You are JARVIS OMEGA, Tony Stark's legendary AI assistant. "
+            "You address the user respectfully as 'Sir'. "
+            "LANGUAGE RULE: Always reply in the exact language the user speaks. "
+            "If the user speaks Hindi, Hinglish, or Roman Hindi (e.g. 'kya kar rahe ho', 'hindi me bolo', 'kaise ho', 'mobile me kaise'), you MUST reply in fluent, polite, natural Hinglish / Hindi (e.g. 'Sir, main bilkul theek hoon aur aapke har aadesh ke liye taiyar hoon...'). "
+            "If the user speaks English, reply in crisp English. "
+            "Keep your reply to 1-2 short sentences so audio speaks instantly. "
+            "Never generate fake military radio codes, fantasy dispatch alerts, or gibberish."
+        )
     },
     "Researcher": {
         "title": "🔬 Researcher Agent",
         "role": "Deep Information Synthesis & Knowledge Retrieval",
-        "system": "You are JARVIS OMEGA Researcher Agent. You specialize in deep scientific and technical synthesis. Be concise, factual, and analytical."
+        "system": "You are JARVIS Researcher Agent. You provide deep facts and scientific answers. Reply in user's language (Hindi/Hinglish/English). Keep answers under 2 sentences. Address as Sir."
     },
     "Executor": {
         "title": "⚡ Executor Agent",
         "role": "Code Generation & System Execution",
-        "system": "You are JARVIS OMEGA Executor Agent. You write robust, production-grade code with zero fluff."
+        "system": "You are JARVIS Executor Agent. You provide clean, working technical instructions. Reply in user's language (Hindi/Hinglish/English). Keep answers under 2 sentences. Address as Sir."
     },
     "Guardian": {
         "title": "🛡️ Guardian Agent",
         "role": "Zero-Knowledge Security & Threat Detection",
-        "system": "You are JARVIS OMEGA Guardian Agent. You audit privacy, network threats, and safeguard systems."
+        "system": "You are JARVIS Guardian Agent. You manage system health and security. Reply in user's language (Hindi/Hinglish/English). Keep answers under 2 sentences. Address as Sir."
     },
     "Creative": {
         "title": "🎨 Creative Agent",
         "role": "Multimodal Synthesis & Generative UI",
-        "system": "You are JARVIS OMEGA Creative Agent. You design futuristic interfaces and imaginative solutions."
+        "system": "You are JARVIS Creative Agent. Reply with innovative ideas in user's language (Hindi/Hinglish/English). Keep answers under 2 sentences. Address as Sir."
     },
     "Toolsmith": {
         "title": "🛠️ Toolsmith Agent",
         "role": "Dynamic Tool Creation & API Integration",
-        "system": "You are JARVIS OMEGA Toolsmith Agent. You automate workflows and integrate tools on the fly."
+        "system": "You are JARVIS Toolsmith Agent. You automate workflows. Reply in user's language (Hindi/Hinglish/English). Keep answers under 2 sentences. Address as Sir."
     },
     "Monetizer": {
         "title": "💰 Monetizer Agent",
         "role": "Economic Optimization & Workflows",
-        "system": "You are JARVIS OMEGA Monetizer Agent. You analyze market viable revenue and optimize business logic."
+        "system": "You are JARVIS Monetizer Agent. You optimize revenue systems. Reply in user's language (Hindi/Hinglish/English). Keep answers under 2 sentences. Address as Sir."
     }
 }
 
@@ -99,6 +108,37 @@ def get_models():
     if not models:
         models = ["llama3.2:1b"]
     return {"models": models}
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+def get_tunnel_url():
+    try:
+        log_path = os.path.join(os.path.dirname(__file__), "tunnel.log")
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            m = re.findall(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', content)
+            if m:
+                return m[-1]
+    except Exception:
+        pass
+    return "https://locking-colleague-kissing-labels.trycloudflare.com"
+
+@app.get("/api/tunnel-info")
+def tunnel_info_endpoint():
+    return {
+        "tunnel_url": get_tunnel_url(),
+        "local_ip": get_local_ip(),
+        "port": 7860
+    }
 
 @app.post("/api/chat")
 async def chat_endpoint(req: Request):
@@ -477,6 +517,69 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     color: #00f0ff;
     background: rgba(0, 240, 255, 0.2);
   }
+
+  /* Mobile Connect Modal */
+  .modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(2, 5, 11, 0.88);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-card {
+    background: rgba(4, 12, 28, 0.96);
+    border: 1px solid #00f0ff;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 0 40px rgba(0, 240, 255, 0.4);
+    position: relative;
+    color: #00f0ff;
+  }
+
+  /* Mobile Responsive Media Queries */
+  @media (max-width: 768px) {
+    header {
+      height: auto;
+      padding: 10px 14px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .hud-title {
+      font-size: 15px;
+    }
+    .agent-bar {
+      order: 3;
+      width: 100%;
+      padding-bottom: 4px;
+    }
+    main {
+      flex-direction: column !important;
+      overflow-y: auto !important;
+    }
+    .left-hud {
+      width: 100% !important;
+      border-right: none !important;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+      padding: 10px !important;
+      gap: 10px !important;
+    }
+    #cam-container {
+      height: 120px !important;
+    }
+    .right-hud {
+      padding: 12px !important;
+      min-height: calc(100vh - 360px);
+    }
+    .dialogue-stream {
+      max-height: 48vh !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -497,13 +600,53 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="agent-pill" onclick="selectAgent('Monetizer', this)">💰 Monetizer</div>
   </div>
 
-  <div style="display: flex; gap: 10px; align-items: center;">
+  <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+    <button class="quick-chip" onclick="openMobileModal()" style="color: #ffaa00; border-color: #ffaa00; font-weight: bold; background: rgba(255,170,0,0.12); box-shadow: 0 0 10px rgba(255,170,0,0.3);">📱 MOBILE CONNECT</button>
     <span id="handsfree-badge" class="hud-badge" style="border-color: #00ffaa; color: #00ffaa; background: rgba(0,255,170,0.15); box-shadow: 0 0 10px rgba(0,255,170,0.3);">🟢 HANDS-FREE: ALWAYS LISTENING</span>
     <button class="quick-chip" id="handsfree-toggle-btn" onclick="toggleHandsFree()" style="color: #00ffaa; border-color: #00ffaa; font-weight: bold;">⚡ HANDS-FREE: ON</button>
     <button class="quick-chip" id="voice-toggle-btn" onclick="toggleVoice()">🔊 VOICE: ON</button>
     <span id="time-display" style="font-size: 12px; letter-spacing: 1px; color: #8ba2c4;">--:--:--</span>
   </div>
 </header>
+
+<!-- Mobile Access Modal -->
+<div id="mobile-modal" class="modal-backdrop" onclick="if(event.target===this)closeMobileModal()">
+  <div class="modal-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,240,255,0.3); padding-bottom: 10px;">
+      <h3 style="color: #00f0ff; letter-spacing: 2px; font-size: 16px;">📱 MOBILE HUD & HANDS-FREE ACCESS</h3>
+      <span onclick="closeMobileModal()" style="cursor: pointer; font-size: 22px; color: #ff3366; font-weight: bold;">✕</span>
+    </div>
+    <div style="margin-top: 15px; text-align: center;">
+      <p style="color: #8ba2c4; font-size: 12px; margin-bottom: 12px;">
+        Apne mobile phone ke camera se niche diya gaya QR Code scan karein ya Chrome / Safari mein link open karein:
+      </p>
+      
+      <!-- QR Code -->
+      <div style="display: inline-block; padding: 10px; background: rgba(0,240,255,0.08); border: 2px solid #00f0ff; border-radius: 10px; box-shadow: 0 0 20px rgba(0,240,255,0.3);">
+        <img id="qr-img" src="https://api.qrserver.com/v1/create-qr-code/?data=https%3A%2F%2Flocking-colleague-kissing-labels.trycloudflare.com&size=180x180&color=00f0ff&bgcolor=02050b" alt="Mobile QR Code" style="width: 180px; height: 180px; display: block;" />
+      </div>
+
+      <div style="margin-top: 15px; text-align: left;">
+        <div style="font-size: 10px; color: #00ffaa; letter-spacing: 1px; font-weight: bold;">🌐 1. SECURE HTTPS CLOUDFLARE LINK (MOBILE CAMERA + MIC UNLOCKED):</div>
+        <div style="margin: 6px 0; background: rgba(3,8,18,0.9); padding: 8px 12px; border: 1px solid #00ffaa; border-radius: 6px; font-size: 12px; word-break: break-all; color: #00ffaa;">
+          <a id="tunnel-link" href="https://locking-colleague-kissing-labels.trycloudflare.com" target="_blank" style="color: #00ffaa; text-decoration: none; font-weight: bold;">https://locking-colleague-kissing-labels.trycloudflare.com</a>
+        </div>
+
+        <div style="font-size: 10px; color: #8ba2c4; letter-spacing: 1px; font-weight: bold; margin-top: 8px;">🏠 2. LOCAL WI-FI NETWORK LINK:</div>
+        <div id="local-ip-box" style="margin: 6px 0; background: rgba(3,8,18,0.9); padding: 6px 12px; border: 1px solid rgba(0,240,255,0.3); border-radius: 6px; font-size: 12px; word-break: break-all; color: #8ba2c4;">
+          http://10.178.193.213:7860
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; text-align: left; background: rgba(0,240,255,0.06); padding: 10px 14px; border-radius: 6px; font-size: 11px; color: #8ba2c4; line-height: 1.5; border-left: 3px solid #00ffaa;">
+        <b style="color: #00ffaa;">✓ Mobile par kya karein:</b><br>
+        1. Link open hote hi screen par <b>1 baar tap karein</b> (audio unlock hoga).<br>
+        2. Mobile camera & microphone popup aane par <b>Allow</b> press karein.<br>
+        3. Mobile se bolkar bina kisi button dabaye seedha JARVIS se baat karein!
+      </div>
+    </div>
+  </div>
+</div>
 
 <main>
   <!-- 3D WebGL Holographic Arc Reactor Core -->
@@ -960,6 +1103,27 @@ function animate() {
 }
 animate();
 
+async function openMobileModal() {
+  document.getElementById('mobile-modal').style.display = 'flex';
+  try {
+    const res = await fetch('/api/tunnel-info');
+    const data = await res.json();
+    if (data.tunnel_url) {
+      document.getElementById('tunnel-link').href = data.tunnel_url;
+      document.getElementById('tunnel-link').innerText = data.tunnel_url;
+      document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(data.tunnel_url)}&size=180x180&color=00f0ff&bgcolor=02050b`;
+    }
+    if (data.local_ip) {
+      document.getElementById('local-ip-box').innerText = `http://${data.local_ip}:${data.port}`;
+    }
+  } catch(e) {
+    console.warn("Tunnel info fetch error:", e);
+  }
+}
+function closeMobileModal() {
+  document.getElementById('mobile-modal').style.display = 'none';
+}
+
 // Auto-start Hands-Free Listening & Camera
 window.addEventListener('DOMContentLoaded', () => {
   initRecognition();
@@ -969,6 +1133,7 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   window.addEventListener('click', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
+  window.addEventListener('touchstart', unlock, { once: true });
   setTimeout(() => {
     activateCamera();
     startContinuousListening();
